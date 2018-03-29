@@ -33,6 +33,11 @@ metadata {
         capability "Polling"
         capability "Refresh"
     }
+    preferences {
+        input "ip", "text", title: "Assistant relay IP Address", description: "IP Address in form 192.168.1.226", required: true, displayDuringSetup: true
+        input "port", "text", title: "Assistant relay Port", description: "port in form of 8090", required: true, displayDuringSetup: true
+        input "mac", "text", title: "Assistant relay MAC Addr", description: "MAC Address in form of 02A1B2C3D4E5", required: true, displayDuringSetup: true
+    }
 
     tiles(scale: 2) {
         standardTile("refresh", "device.refresh", inactiveLabel: false, decoration: "flat", height: 2, width: 2) {
@@ -98,27 +103,15 @@ def refresh(){
 
 }
 
-def sync(ip, port) {
-    def existingIp = getDataValue("ip")
-    def existingPort = getDataValue("port")
-    if (ip && ip != existingIp) {
-        updateDataValue("ip", ip)
-    }
-    if (port && port != existingPort) {
-        updateDataValue("port", port)
-    }
-    refresh()
-}
-
 def httpPostJSON(path) {
-	def hostUri = hostAddress
-    log.debug "Sending command ${path} to ${hostUri}"
+    log.debug "Sending command ${path} to ${ip}:${port}@${mac}"
     def result = new physicalgraph.device.HubAction(
             method: "POST",
             path: path,
             headers: [
-                    HOST: hostUri
-            ]
+                    HOST: "$ip:$port"
+            ],
+            dni: mac
     )
     //log.debug "Request: ${result.requestId}"
     return result
@@ -130,21 +123,7 @@ def httpPostJSON(path) {
 }*/
 
 private getHostAddress() {
-    def ip = getDataValue("ip")
-    def port = getDataValue("port")
-
-    if (!ip || !port) {
-        def parts = device.deviceNetworkId.split(":")
-        if (parts.length == 2) {
-            ip = parts[0]
-            port = parts[1]
-        } else {
-            log.warn "Can't figure out ip and port for device: ${device.id}"
-        }
-    }
-
-    log.debug "Using IP: $ip and port: $port for device: ${device.id}"
-    return convertHexToIP(ip) + ":" + convertHexToInt(port)
+    return convertHexToIP(${ip}) + ":" + convertHexToInt(${port})
 }
 
 private Integer convertHexToInt(hex) {
