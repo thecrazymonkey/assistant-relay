@@ -1,20 +1,11 @@
 'use strict'
 
-const SSDP = require('node-ssdp').Server;
 const path = require('path');
 const express = require('express');
 const GoogleAssistant = require('google-assistant');
 const GRConfig = require('./config.json');
+const readline = require('readline');
 const async = require('async');
-const ip = require('ip')
-
-
-//Define SSDP Server Configuration
-const ssdpServer = new SSDP({
-  location: 'http://' + require('ip').address() + ':3000/desc.xml',
-  sourcePort: 1900,
-  ssdpTtl: 3,
-});
 
 const authKeys = GRConfig.users;
 
@@ -23,8 +14,9 @@ const config = {
     lang: GRConfig.language,
   },
   users: {},
-  assistants: {},
-  port: GRConfig.port
+  ip: GRConfig.ip,
+  port: GRConfig.port,
+  assistants: {}
 }
 
 const defaultAudio = false;
@@ -37,21 +29,13 @@ if(Object.keys(authKeys).length === 0){
 
 Object.keys(authKeys).forEach(function(k){
   config.users[k] = {};
-  config.users[k].keyFilePath = authKeys[k].keyFilePath;
-  config.users[k].savedTokensPath = authKeys[k].savedTokensPath;
+  config.users[k].keyFilePath = path.resolve(__dirname, `${authKeys[k]}`);
+  config.users[k].savedTokensPath = path.resolve(__dirname, `${k}-tokens.json`);
 })
-
-//Define SSDP USN type
-ssdpServer.addUSN('urn:greghesp-com:device:GAssist:1');
 
 const app = express()
 app.use(express.static(path.join(__dirname, 'xml')));
 app.use(express.static(path.join(__dirname, 'audio')));
-
-//Start SSDP Server
-ssdpServer.start(function(){
-  console.log('Fired up the SSDP Server for network discovery...')
-});
 
 // Endpoint API
 app.post('/custom', function (req, res) {
@@ -66,6 +50,7 @@ app.post('/custom', function (req, res) {
       message: `Custom command executed`,
       command: `${command}`
   });
+
 })
 
 app.post('/customBroadcast', function (req, res) {
@@ -80,26 +65,26 @@ app.post('/customBroadcast', function (req, res) {
   res.status(200).json({
       message: `Custom broadcast command executed`,
       command: `broadcast ${command}`
-  });
+   });
 })
 
 app.post('/nestStream', function (req, res) {
   if(req.query.converse) returnAudio = true;
 
   if(req.query.stop) {
-    sendTextInput(`Stop ${req.query.chromecast}`);
+      sendTextInput(`Stop ${req.query.chromecast}`);
 
-    res.status(200).json({
-        message: `Nest stream command executed`,
-        command: `Stop ${req.query.chromecast}`
-    });
+      res.status(200).json({
+          message: `Nest stream command executed`,
+          command: `Stop ${req.query.chromecast}`
+      });
   }
 
   if(!checkUser(req.query.user)) {
     console.log(`User ${req.query.user} not found.  Cannot execute request`);
     return res.status(400).json({
-        message: `User not found. Who is ${req.query.user}?`,
-        command: `Show ${req.query.camera} on ${req.query.chromecast} | User: ${req.query.user}`
+         message: `User not found. Who is ${req.query.user}?`,
+         command: `Show ${req.query.camera} on ${req.query.chromecast} | User: ${req.query.user}`
     });
   }
 
@@ -126,48 +111,48 @@ app.post('/broadcast', function (req, res) {
   }
 
   switch(preset) {
-    case 'wakeup':
-        sendTextInput(`broadcast wake up everyone`, user);
-        break;
-    case 'breakfast':
-        sendTextInput(`broadcast breakfast is ready`, user);
-        break;
-    case 'lunch':
-        sendTextInput(`broadcast it's lunch time`, user);
-        break;
-    case 'dinner':
-        sendTextInput('broadcast dinner is served', user);
-        break;
-    case 'timetoleave':
-        sendTextInput(`broadcast its time to leave`, user);
-        break;
-    case 'arrivedhome':
-        sendTextInput(`broadcast i'm home`, user);
-        break;
-    case 'ontheway':
-        sendTextInput(`broadcast i'm on the way`, user);
-        break;
-    case 'movietime':
-        sendTextInput(`broadcast the movie is about to start`, user);
-        break;
-    case 'tvtime':
-        sendTextInput(`broadcast the show is about to start`, user);
-        break;
-    case 'bedtime':
-        sendTextInput(`broadcast we should go to bed`, user);
-        break;
-    default:
-        sendTextInput(`broadcast you selected a preset broadcast, but didn't say which one`, user);
-  }
+      case 'wakeup':
+          sendTextInput(`broadcast wake up everyone`, user);
+          break;
+      case 'breakfast':
+          sendTextInput(`broadcast breakfast is ready`, user);
+          break;
+      case 'lunch':
+          sendTextInput(`broadcast it's lunch time`, user);
+          break;
+      case 'dinner':
+          sendTextInput('broadcast dinner is served', user);
+          break;
+      case 'timetoleave':
+          sendTextInput(`broadcast its time to leave`, user);
+          break;
+      case 'arrivedhome':
+          sendTextInput(`broadcast i'm home`, user);
+          break;
+      case 'ontheway':
+          sendTextInput(`broadcast i'm on the way`, user);
+          break;
+      case 'movietime':
+          sendTextInput(`broadcast the movie is about to start`, user);
+          break;
+      case 'tvtime':
+          sendTextInput(`broadcast the show is about to start`, user);
+          break;
+      case 'bedtime':
+          sendTextInput(`broadcast we should go to bed`, user);
+          break;
+      default:
+          sendTextInput(`broadcast you selected a preset broadcast, but didn't say which one`, user);
+    }
 
     res.status(200).json({
-        message: `Predefined command executed`,
-        command: `${req.query.preset}`
-    });
+          message: `Predefined command executed`,
+          command: `${req.query.preset}`
+   });
 })
 
 //Start Express Web Server
-app.listen(config.port, () => console.log(`Firing up the Web Server for communication on address ${ip.address()}:${config.port}`))
+app.listen({ host:config.ip, port:config.port}, () => console.log('Firing up the Web Server for communication on host:port '+ config.ip+':'+config.port))
 
 let users;
 let numberUsers = Object.keys(config.users).length;
@@ -185,7 +170,7 @@ if( numberUsers > 1){
   })
 } else {
   Object.keys(config.users).forEach(i => {
-    users = i
+     users = i
   })
 }
 
@@ -195,12 +180,12 @@ async.forEachOfLimit(config.users, 1, function(i, k, cb){
   let assistant = config.assistants[k];
   assistant.on('ready', () => cb());
   assistant.on('error', (e) => {
-    console.log(`Assistant Error when activating user ${k}. Trying next user`);
-    return cb();
+      console.log(`Assistant Error when activating user ${k}. Trying next user`);
+      return cb();
   })
 }, function(err){
   if(err) return console.log(err.message);
-  //console.log('running')
+	  //console.log('running')
     sendTextInput(`broadcast Assistant Relay is now setup and running for ${users}`)
 })
 
@@ -219,7 +204,7 @@ function startConversation(conversation) {
       if (text) {
         console.log('Google Assistant:', text)
         var newLineSplit = text.split("\n")
-        // Ignore lines if Assistant responds with extra interactive data (such as a "See More" web URL)
+      // Ignore lines if Assistant responds with extra interactive data (such as a "See More" web URL)
         if (newLineSplit.length > 1) text = newLineSplit[0]
         if(returnAudio) {
           //console.log(`sendTextInput ${text}`)
@@ -227,10 +212,10 @@ function startConversation(conversation) {
           returnAudio = defaultAudio;
         }
 
-      }
+      }  
     })
-    //.on('volume-percent', percent => console.log('New Volume Percent:', percent))
-    //.on('device-action', action => console.log('Device Action:', action))
+   //.on('volume-percent', percent => console.log('New Volume Percent:', percent))
+   //.on('device-action', action => console.log('Device Action:', action))
     .on('ended', (error, continueConversation) => {
       if (error) {
         console.log('Conversation Ended Error:', error);
@@ -250,11 +235,10 @@ function startConversation(conversation) {
 function sendTextInput(text, n) {
   console.log(`Received command ${text}`);
 
-      assistant = Object.keys(config.assistants)[0];
-      assistant = config.assistants[`${assistant}`];
+  assistant = Object.keys(config.assistants)[0];
+  assistant = config.assistants[`${assistant}`];
 
   config.conversation.textQuery = text;
-
   if(n) {
     n = n.toLowerCase();
     console.log(`User specified was ${n}`)

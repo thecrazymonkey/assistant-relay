@@ -1,1 +1,8 @@
-{"language":"en-US","users":{},"port":"3000"}
+{
+  "users" : {
+    "ivan": "ivan_client_secret.json"
+  },
+  "language": "en-US",
+  "ip": "192.168.1.37",
+  "port": "3000"
+}
